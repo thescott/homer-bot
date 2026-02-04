@@ -1,5 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
 
+// Helper function to render text with clickable links
+function renderMessageWithLinks(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 underline"
+        >
+          📍 View on Google Maps
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 function App() {
   const [messages, setMessages] = useState([
     {
@@ -120,7 +143,7 @@ function App() {
                       <span className="font-semibold text-pink-600">Homer</span>
                     </div>
                   )}
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p className="whitespace-pre-wrap">{renderMessageWithLinks(message.content)}</p>
                 </div>
               </div>
             ))}
