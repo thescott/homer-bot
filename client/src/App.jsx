@@ -4,7 +4,7 @@ function App() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Mmm, donuts! Hi there! I'm Homer, your friendly donut expert. Ask me anything about donuts, donut shops, or where to find the best donuts in your area!",
+      content: "Mmm... donuts... *drools* Oh! Hey there! I'm Homer Simpson, and I'm here to talk about the greatest thing ever invented - DONUTS! Woohoo! Ask me anything about donuts, donut shops, or where to find the most delicious, sprinkle-covered, glazed pieces of heaven. Mmm... forbidden donut...",
     },
   ]);
   const [input, setInput] = useState('');
@@ -56,11 +56,18 @@ function App() {
       ]);
     } catch (error) {
       console.error('Error:', error);
+      const errorMessages = [
+        "D'oh! Something went wrong! Why you little... *strangles computer* Try again, will ya?",
+        "D'oh! The internet ate my response! This is worse than when Marge hides my donuts!",
+        "Why you little...! Something broke! Give me a sec to fix it. *bonks head* Try again!",
+        "D'oh! Error! This is the worst thing to happen since they discontinued the Lard Lad special!",
+      ];
+      const randomError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: "D'oh! Something went wrong. Please try again!",
+          content: randomError,
         },
       ]);
     } finally {
