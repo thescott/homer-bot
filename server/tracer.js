@@ -1,14 +1,6 @@
-// Datadog APM Tracer - must be initialized before other imports
+// Datadog APM Tracer
+// When using --import dd-trace/initialize.mjs, tracer is already initialized
+// via environment variables. We just export the instance here.
 import tracer from 'dd-trace';
-
-tracer.init({
-  service: process.env.DD_SERVICE || 'homer-bot',
-  env: process.env.DD_ENV || 'development',
-  version: '1.0.0',
-  logInjection: true,
-  runtimeMetrics: true,
-  profiling: true,
-  appsec: true,
-});
 
 export default tracer;

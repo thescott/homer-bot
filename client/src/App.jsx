@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { datadogRum } from '@datadog/browser-rum';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -29,11 +28,6 @@ function App() {
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
-    // Track user action in Datadog RUM
-    datadogRum.addAction('send_message', {
-      messageLength: userMessage.length,
-    });
-
     try {
       const conversationHistory = messages.map((msg) => ({
         role: msg.role,
@@ -60,14 +54,8 @@ function App() {
         ...prev,
         { role: 'assistant', content: data.message },
       ]);
-
-      // Track successful response in Datadog RUM
-      datadogRum.addAction('receive_response', {
-        tokensUsed: data.usage?.total_tokens,
-      });
     } catch (error) {
       console.error('Error:', error);
-      datadogRum.addError(error);
       setMessages((prev) => [
         ...prev,
         {
