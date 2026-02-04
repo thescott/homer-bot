@@ -1,0 +1,19 @@
+{
+  "name": "homer-bot-server",
+  "version": "1.0.0",
+  "description": "Homer Bot Express backend",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dd-trace": "^5.0.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^4.24.1",
+    "winston": "^3.11.0"
+  }
+}
