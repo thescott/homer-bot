@@ -6,7 +6,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import logger from './logger.js';
-import { traceLLMCall } from './llm-observability.js';
+import { tracedChatCompletion } from './llm-observability.js';
 
 dotenv.config();
 
@@ -93,41 +93,25 @@ app.post('/api/chat', async (req, res) => {
       { role: 'user', content: message },
     ];
 
-    const startTime = Date.now();
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // LLM span starts here, annotates input/output, and ends once the response is returned
+    const { responseMessage, usage, duration } = await tracedChatCompletion({
+      openai,
       messages,
-      max_tokens: 500,
-      temperature: 0.8,
-    });
-
-    const duration = Date.now() - startTime;
-    const responseMessage = completion.choices[0].message.content;
-
-    // Track LLM call for Datadog LLM Observability
-    traceLLMCall({
       model: 'gpt-4o-mini',
-      prompt: message,
-      response: responseMessage,
-      duration,
-      tokens: {
-        prompt: completion.usage?.prompt_tokens,
-        completion: completion.usage?.completion_tokens,
-        total: completion.usage?.total_tokens,
-      },
+      maxTokens: 500,
+      temperature: 0.8,
     });
 
     logger.info('Chat response generated', {
       model: 'gpt-4o-mini',
       duration,
-      promptTokens: completion.usage?.prompt_tokens,
-      completionTokens: completion.usage?.completion_tokens,
+      promptTokens: usage?.prompt_tokens,
+      completionTokens: usage?.completion_tokens,
     });
 
     res.json({
       message: responseMessage,
-      usage: completion.usage,
+      usage,
     });
   } catch (error) {
     logger.error('Error processing chat request', {

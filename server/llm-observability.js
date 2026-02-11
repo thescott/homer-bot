@@ -3,52 +3,64 @@ import tracer from './tracer.js';
 import logger from './logger.js';
 
 /**
- * Track LLM API calls for Datadog LLM Observability
- * This sends metrics and traces for OpenAI API calls
+ * Execute an OpenAI chat completion inside a properly traced LLM Obs span.
+ * The span starts when the call begins and ends once the response is returned,
+ * mirroring the Python LLMObs.llm() context manager pattern.
  */
-export function traceLLMCall({ model, prompt, response, duration, tokens }) {
-  const span = tracer.scope().active();
-
-  // Add LLM-specific tags to the current span
-  if (span) {
-    span.setTag('llm.request.model', model);
-    span.setTag('llm.request.type', 'chat');
-    span.setTag('llm.usage.prompt_tokens', tokens.prompt);
-    span.setTag('llm.usage.completion_tokens', tokens.completion);
-    span.setTag('llm.usage.total_tokens', tokens.total);
-    span.setTag('llm.response.duration_ms', duration);
-
-    // Tag for LLM Observability
-    span.setTag('ml_app', 'homer-bot');
-    span.setTag('model_name', model);
-    span.setTag('model_provider', 'openai');
-  }
-
-  // Log for Datadog Logs correlation
-  logger.info('LLM API Call', {
-    llm: {
-      model,
-      provider: 'openai',
-      request_type: 'chat',
-      duration_ms: duration,
-      tokens: {
-        prompt: tokens.prompt,
-        completion: tokens.completion,
-        total: tokens.total,
-      },
+export async function tracedChatCompletion({ openai, messages, model = 'gpt-4o-mini', maxTokens = 500, temperature = 0.8 }) {
+  return tracer.llmobs.trace(
+    {
+      kind: 'llm',
+      name: 'openai-chat-completion',
+      modelName: model,
+      modelProvider: 'openai',
     },
-    ml_app: 'homer-bot',
-  });
+    async () => {
+      const startTime = Date.now();
 
-  // Custom metrics for LLM monitoring
-  const metrics = tracer.dogstatsd;
-  if (metrics) {
-    metrics.increment('llm.requests', 1, [`model:${model}`, 'provider:openai']);
-    metrics.histogram('llm.duration', duration, [`model:${model}`]);
-    metrics.histogram('llm.tokens.prompt', tokens.prompt, [`model:${model}`]);
-    metrics.histogram('llm.tokens.completion', tokens.completion, [`model:${model}`]);
-    metrics.histogram('llm.tokens.total', tokens.total, [`model:${model}`]);
-  }
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        max_tokens: maxTokens,
+        temperature,
+      });
+
+      const duration = Date.now() - startTime;
+      const responseMessage = completion.choices[0].message.content;
+
+      // Annotate the span with input/output data and token metrics
+      tracer.llmobs.annotate({
+        inputData: messages.map(m => ({ role: m.role, content: m.content })),
+        outputData: [{ role: 'assistant', content: responseMessage }],
+        metrics: {
+          input_tokens: completion.usage?.prompt_tokens,
+          output_tokens: completion.usage?.completion_tokens,
+          total_tokens: completion.usage?.total_tokens,
+        },
+        metadata: {
+          temperature,
+          max_tokens: maxTokens,
+        },
+      });
+
+      logger.info('LLM API Call', {
+        llm: {
+          model,
+          provider: 'openai',
+          request_type: 'chat',
+          duration_ms: duration,
+          tokens: {
+            prompt: completion.usage?.prompt_tokens,
+            completion: completion.usage?.completion_tokens,
+            total: completion.usage?.total_tokens,
+          },
+        },
+        ml_app: 'homer-bot',
+      });
+
+      return { responseMessage, usage: completion.usage, duration };
+    }
+  );
 }
 
-export default { traceLLMCall };
+export default { tracedChatCompletion };
