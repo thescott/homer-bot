@@ -7,7 +7,7 @@ import logger from './logger.js';
  * The span starts when the call begins and ends once the response is returned,
  * mirroring the Python LLMObs.llm() context manager pattern.
  */
-export async function tracedChatCompletion({ openai, messages, model = 'gpt-4o-mini', maxTokens = 500, temperature = 0.8 }) {
+export async function tracedChatCompletion({ openai, messages, model = 'gpt-4o-mini', maxTokens = 200, temperature = 0.8 }) {
   return tracer.llmobs.trace(
     {
       kind: 'llm',
@@ -17,25 +17,49 @@ export async function tracedChatCompletion({ openai, messages, model = 'gpt-4o-m
     },
     async () => {
       const startTime = Date.now();
+      let timeToFirstToken = null;
 
-      const completion = await openai.chat.completions.create({
+      // Use streaming to capture time_to_first_token
+      const stream = await openai.chat.completions.create({
         model,
         messages,
         max_tokens: maxTokens,
         temperature,
+        stream: true,
+        stream_options: { include_usage: true },
       });
 
-      const duration = Date.now() - startTime;
-      const responseMessage = completion.choices[0].message.content;
+      const chunks = [];
+      let usage = null;
 
-      // Annotate the span with input/output data and token metrics
+      for await (const chunk of stream) {
+        // Record TTFT on the first content chunk
+        if (timeToFirstToken === null && chunk.choices?.[0]?.delta?.content) {
+          timeToFirstToken = (Date.now() - startTime) / 1000; // seconds
+        }
+
+        if (chunk.choices?.[0]?.delta?.content) {
+          chunks.push(chunk.choices[0].delta.content);
+        }
+
+        // The final chunk with stream_options includes usage
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      const responseMessage = chunks.join('');
+
+      // Annotate the span with input/output data, token metrics, and TTFT
       tracer.llmobs.annotate({
         inputData: messages.map(m => ({ role: m.role, content: m.content })),
         outputData: [{ role: 'assistant', content: responseMessage }],
         metrics: {
-          input_tokens: completion.usage?.prompt_tokens,
-          output_tokens: completion.usage?.completion_tokens,
-          total_tokens: completion.usage?.total_tokens,
+          input_tokens: usage?.prompt_tokens,
+          output_tokens: usage?.completion_tokens,
+          total_tokens: usage?.total_tokens,
+          time_to_first_token: timeToFirstToken,
         },
         metadata: {
           temperature,
@@ -49,16 +73,17 @@ export async function tracedChatCompletion({ openai, messages, model = 'gpt-4o-m
           provider: 'openai',
           request_type: 'chat',
           duration_ms: duration,
+          time_to_first_token_s: timeToFirstToken,
           tokens: {
-            prompt: completion.usage?.prompt_tokens,
-            completion: completion.usage?.completion_tokens,
-            total: completion.usage?.total_tokens,
+            prompt: usage?.prompt_tokens,
+            completion: usage?.completion_tokens,
+            total: usage?.total_tokens,
           },
         },
         ml_app: 'homer-bot',
       });
 
-      return { responseMessage, usage: completion.usage, duration };
+      return { responseMessage, usage, duration };
     }
   );
 }
